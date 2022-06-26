@@ -25,6 +25,14 @@ public class PlayerLook : MonoBehaviour
     [SerializeField] private LayerMask groundMask;
     private bool isGrounded;
 
+    //Variables for Jumping
+    [SerializeField] private float jumpHeight;
+
+    //Variables for Sliding
+    private Vector3 slideVector;
+    [SerializeField] private float intialSlideForce;
+    [SerializeField] private float slideDecrease;
+
     void Start()
     {   
         //Locks cusrsor for easy input for rotation using the mouse
@@ -35,14 +43,68 @@ public class PlayerLook : MonoBehaviour
     {   
         //Calls all processes
         Move();
-        Look();
         ApplyGravity();
+
+        //Checks for input for jumping
+        if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
+            Jump();
+        }
+        
+        ///Check for input for sliding
+        if(Input.GetKeyDown(KeyCode.LeftControl) && isGrounded){
+            //Coroutine as sliding takes place over multiple seconds
+            StartCoroutine("Slide");
+        }
+
+    }
+
+    // Calls Late Processes
+    void LateUpdate() {
+        //Look is delayed so that it is processed after moving the player
+        Look();
+    }
+
+    //Handles sliding, which must take place over multiple seconds
+    IEnumerator Slide(){
+        //Introduces any starting values
+        float countdown = 0.5f;
+        slideVector = Vector3.forward * intialSlideForce * Time.deltaTime;
+
+        //Moves camera down to provide effect of sliding
+        playerCamera.transform.Translate(Vector3.down * 0.5f);
+
+        //Timed Loop
+        while(countdown > 0){
+            countdown -= Time.deltaTime;
+
+            //Decreases force of slide over time
+            slideVector.z -= slideDecrease * Time.deltaTime;
+            //Transforms the vector from local to world space, and uses it in the controller.Move() function
+            Vector3 localSlideVector = transform.TransformDirection(slideVector); 
+            controller.Move(localSlideVector);
+
+            //Does something important
+            yield return null;
+        }  
+
+        //Moves camera back up before ending the slide
+        playerCamera.transform.Translate(Vector3.up * 0.5f);
+    }
+
+
+    //Handles moving the player upwards during a jump
+    void Jump(){
+        //Formula allows to instatly determine the height of the jump
+        gravityVelocity.y = Mathf.Sqrt(jumpHeight * -2 * gravityStength);
     }
 
     void ApplyGravity(){
+        //Checks if the player is grounded
         isGrounded = Physics.CheckSphere(groundCheck.transform.position, groundDistance, groundMask);
 
+        //Removes any velocity build-up when the floor is touched
         if(isGrounded && gravityVelocity.y < 0){
+            //Negative velocity is used to ensure to player never hovers above the ground
             gravityVelocity.y = -2f;
         }
 
