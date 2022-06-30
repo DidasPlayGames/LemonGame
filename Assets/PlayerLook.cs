@@ -4,6 +4,9 @@ using UnityEngine;
 
 public class PlayerLook : MonoBehaviour
 {
+    //Major Variable used to move the player horizontally
+    private Vector3 velocity;
+
     //Variables for Rotation and Looking
     private float mouseX;
     private float mouseY;
@@ -16,6 +19,7 @@ public class PlayerLook : MonoBehaviour
     private float verticalInput;
     [SerializeField] private CharacterController controller;
     [SerializeField] private int movementSpeed;
+    private bool isSliding;
 
     //Variables for Gravity and Ground-Checking
     Vector3 gravityVelocity;
@@ -29,9 +33,22 @@ public class PlayerLook : MonoBehaviour
     [SerializeField] private float jumpHeight;
 
     //Variables for Sliding
-    private Vector3 slideVector;
+    private float slideDistance;
     [SerializeField] private float intialSlideForce;
     [SerializeField] private float slideDecrease;
+
+    //Variables for Detecting Slope Angle
+    [SerializeField] private Transform rearRayTransform;
+    [SerializeField] private Transform frontRayTransform;
+    [SerializeField] private LayerMask slopeMask;
+    private float slopeAngle;
+    private float rearRayDistance;
+    private float frontRayDistance;
+
+    //Variables to determine player's direction during movement on the slope
+    private bool uphill;
+    private bool downhill;
+    private bool flatSurface;
 
     void Start()
     {   
@@ -41,21 +58,26 @@ public class PlayerLook : MonoBehaviour
 
     void Update()
     {   
+        //Check for input for sliding
+        if(Input.GetKeyDown(KeyCode.LeftControl) && isGrounded){
+            //Coroutine as sliding takes place over multiple seconds
+            StartCoroutine("Slide");
+        }
+
         //Calls all processes
         Move();
         ApplyGravity();
+        DetectSlope();
 
         //Checks for input for jumping
         if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
             Jump();
         }
         
-        ///Check for input for sliding
-        if(Input.GetKeyDown(KeyCode.LeftControl) && isGrounded){
-            //Coroutine as sliding takes place over multiple seconds
-            StartCoroutine("Slide");
-        }
-
+        //Applies all movement processes and calculation. This line actually translates the player
+        controller.Move(velocity);
+        //Clears the vector, allowing all movement calculations to be added and recalculated once again
+        velocity = Vector3.zero;
     }
 
     // Calls Late Processes
@@ -64,11 +86,67 @@ public class PlayerLook : MonoBehaviour
         Look();
     }
 
+    //Handles calculating the slope and determining if the player is travelling uphill or downhill
+    void DetectSlope(){
+        //Sets direction for spawning objects, in order to always keep the ray pointing downwards
+        rearRayTransform.rotation = Quaternion.Euler(-transform.rotation.x, 0, 0);
+        frontRayTransform.rotation = Quaternion.Euler(-transform.rotation.x, 0, 0);
+
+        //Important and needed variable
+        Vector3 rearRayNormal;
+
+        //Initializes raycast outputs
+        RaycastHit backHit;
+        RaycastHit frontHit;
+
+        //Casts rear ray
+        if(Physics.Raycast(rearRayTransform.position, rearRayTransform.TransformDirection(Vector3.down), out backHit, Mathf.Infinity, slopeMask)){
+            //Collects the distance of the ray
+            rearRayDistance = backHit.distance;
+
+            //Calculates and outputs slope angle
+            rearRayNormal = backHit.normal;
+            slopeAngle = Vector3.Angle(Vector3.up, rearRayNormal);
+            Debug.Log(slopeAngle);
+
+            //Draws the ray that has been shot
+            Debug.DrawRay(rearRayTransform.position, rearRayTransform.TransformDirection(Vector3.down) * rearRayDistance, Color.black);
+        }
+
+        //Casts front ray
+        if(Physics.Raycast(frontRayTransform.position, frontRayTransform.TransformDirection(Vector3.down), out frontHit, Mathf.Infinity, slopeMask)){
+            //Collects the distance of the ray
+            frontRayDistance = frontHit.distance;
+            
+            //Draws the ray that has been shot
+            Debug.DrawRay(frontRayTransform.position, frontRayTransform.TransformDirection(Vector3.down) * frontRayDistance, Color.yellow);
+        }
+
+        //Compares slope distances to determine direction on slope
+        if(frontRayDistance < rearRayDistance){
+            uphill = true;
+            downhill = false;
+            flatSurface = false;
+        }
+        else if(frontRayDistance > rearRayDistance){
+            uphill = false;
+            downhill = true;
+            flatSurface = false;
+        }
+        else{
+            uphill = false;
+            downhill = false;
+            flatSurface = true;
+        }
+    }
+
+
+
     //Handles sliding, which must take place over multiple seconds
     IEnumerator Slide(){
         //Introduces any starting values
         float countdown = 0.5f;
-        slideVector = Vector3.forward * intialSlideForce * Time.deltaTime;
+        slideDistance = 1 * intialSlideForce * Time.deltaTime;
 
         //Moves camera down to provide effect of sliding
         playerCamera.transform.Translate(Vector3.down * 0.5f);
@@ -77,16 +155,20 @@ public class PlayerLook : MonoBehaviour
         while(countdown > 0){
             countdown -= Time.deltaTime;
 
-            //Decreases force of slide over time
-            slideVector.z -= slideDecrease * Time.deltaTime;
-            //Transforms the vector from local to world space, and uses it in the controller.Move() function
-            Vector3 localSlideVector = transform.TransformDirection(slideVector); 
-            controller.Move(localSlideVector);
+            //Cancels any vertical input, disabling the option to move forwards or backwards
+            isSliding = true;
 
-            //Does something important
+            //Decreases force of slide over time
+            slideDistance -= slideDecrease * Time.deltaTime;
+            //Moves the variable into a vector, which is already transfromed into local space. This is then applied to the global velocity vector
+            Vector3 slideVector = transform.forward * slideDistance;
+            velocity += slideVector;
+
+            //Does something important (I have no idea, but the code doesn't work if I remove it)
             yield return null;
         }  
 
+        isSliding = false;
         //Moves camera back up before ending the slide
         playerCamera.transform.Translate(Vector3.up * 0.5f);
     }
@@ -95,6 +177,7 @@ public class PlayerLook : MonoBehaviour
     //Handles moving the player upwards during a jump
     void Jump(){
         //Formula allows to instatly determine the height of the jump
+        //This must be aaplied to the gravityVelocity vector, as it has to cancel the gravity force in order to work.
         gravityVelocity.y = Mathf.Sqrt(jumpHeight * -2 * gravityStength);
     }
 
@@ -118,11 +201,19 @@ public class PlayerLook : MonoBehaviour
     void Move(){
         //Gathers input from the keyboard and converts into appropriate value
         horizontalInput = Input.GetAxis("Horizontal") * movementSpeed * Time.deltaTime;
-        verticalInput = Input.GetAxis("Vertical") * movementSpeed * Time.deltaTime;
+        //Vertical input is in an if statement because it must be disable during sliding
+        if(!isSliding){
+            verticalInput = Input.GetAxis("Vertical") * movementSpeed * Time.deltaTime;
+        }
+        else{
+            verticalInput = 0f;
+        }
 
-        //Moves using CharacterController, according to player's input
-        Vector3 move = transform.right * horizontalInput + transform.forward * verticalInput;
-        controller.Move(move);
+
+        //Creates the movement vector based on the input gathered, and applies to the global velocity vector
+        Vector3 move = Vector3.right * horizontalInput + Vector3.forward * verticalInput;
+        Vector3 localMove = transform.TransformDirection(move);
+        velocity += localMove;
     }
 
     //Handles looking around and input with the mouse
