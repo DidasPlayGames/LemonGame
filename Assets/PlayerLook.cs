@@ -36,6 +36,8 @@ public class PlayerLook : MonoBehaviour
     private float slideDistance;
     [SerializeField] private float intialSlideForce;
     [SerializeField] private float slideDecrease;
+    [SerializeField] private float initialSlideCooldown;
+    private float slideCooldown;
 
     //Variables for Detecting Slope Angle
     [SerializeField] private Transform rearRayTransform;
@@ -50,18 +52,32 @@ public class PlayerLook : MonoBehaviour
     private bool downhill;
     private bool flatSurface;
 
+    //Applying slope direction and angle into sliding
+    [SerializeField] private float angleEffectMultiplier;
+
     void Start()
     {   
         //Locks cusrsor for easy input for rotation using the mouse
         Cursor.lockState = CursorLockMode.Locked;
+
+        //Sets the slide cooldown to its intended value that was set in the editor
+        slideCooldown = initialSlideCooldown;
     }
 
     void Update()
     {   
+        //Updates the Sliding Cooldown
+        slideCooldown -= Time.deltaTime;
+
         //Check for input for sliding
-        if(Input.GetKeyDown(KeyCode.LeftControl) && isGrounded){
+        if(Input.GetKeyDown(KeyCode.LeftControl) && isGrounded && slideCooldown < 0 && !isSliding){
             //Coroutine as sliding takes place over multiple seconds
             StartCoroutine("Slide");
+        }
+
+        //Checks for input for jumping
+        if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
+            Jump();
         }
 
         //Calls all processes
@@ -69,15 +85,13 @@ public class PlayerLook : MonoBehaviour
         ApplyGravity();
         DetectSlope();
 
-        //Checks for input for jumping
-        if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
-            Jump();
-        }
         
         //Applies all movement processes and calculation. This line actually translates the player
         controller.Move(velocity);
         //Clears the vector, allowing all movement calculations to be added and recalculated once again
         velocity = Vector3.zero;
+
+        Debug.Log(slideCooldown);
     }
 
     // Calls Late Processes
@@ -107,7 +121,6 @@ public class PlayerLook : MonoBehaviour
             //Calculates and outputs slope angle
             rearRayNormal = backHit.normal;
             slopeAngle = Vector3.Angle(Vector3.up, rearRayNormal);
-            Debug.Log(slopeAngle);
 
             //Draws the ray that has been shot
             Debug.DrawRay(rearRayTransform.position, rearRayTransform.TransformDirection(Vector3.down) * rearRayDistance, Color.black);
@@ -145,21 +158,22 @@ public class PlayerLook : MonoBehaviour
     //Handles sliding, which must take place over multiple seconds
     IEnumerator Slide(){
         //Introduces any starting values
-        float countdown = 0.5f;
         slideDistance = 1 * intialSlideForce * Time.deltaTime;
 
-        //Moves camera down to provide effect of sliding
-        playerCamera.transform.Translate(Vector3.down * 0.5f);
-
-        //Timed Loop
-        while(countdown > 0){
-            countdown -= Time.deltaTime;
+        //Loop that ends if velocity is too low
+        while(slideDistance > 0.01){
 
             //Cancels any vertical input, disabling the option to move forwards or backwards
             isSliding = true;
 
             //Decreases force of slide over time
             slideDistance -= slideDecrease * Time.deltaTime;
+
+            //Adds slide velocity depending on angle of the slope. The players must be travelling downhill
+            if(downhill && isGrounded){
+                slideDistance += slopeAngle * angleEffectMultiplier * Time.deltaTime;
+            }
+
             //Moves the variable into a vector, which is already transfromed into local space. This is then applied to the global velocity vector
             Vector3 slideVector = transform.forward * slideDistance;
             velocity += slideVector;
@@ -168,9 +182,11 @@ public class PlayerLook : MonoBehaviour
             yield return null;
         }  
 
+        //Reanbles movement
         isSliding = false;
-        //Moves camera back up before ending the slide
-        playerCamera.transform.Translate(Vector3.up * 0.5f);
+
+        //Resets the slide cooldown. Must be done at the end to prevent instantly sliding after a long slide
+        slideCooldown = initialSlideCooldown;
     }
 
 
@@ -181,6 +197,7 @@ public class PlayerLook : MonoBehaviour
         gravityVelocity.y = Mathf.Sqrt(jumpHeight * -2 * gravityStength);
     }
 
+    //Handles pushing the player downwards if they are not touching the ground. This function also handles isGrounded boolean calculations
     void ApplyGravity(){
         //Checks if the player is grounded
         isGrounded = Physics.CheckSphere(groundCheck.transform.position, groundDistance, groundMask);
@@ -188,6 +205,16 @@ public class PlayerLook : MonoBehaviour
         //Removes any velocity build-up when the floor is touched
         if(isGrounded && gravityVelocity.y < 0){
             //Negative velocity is used to ensure to player never hovers above the ground
+            gravityVelocity.y = -2f;
+
+            //Checks if the player is siliding. Applies extra gravity to counteract the additional velocity of a slide off a slope
+            if(isSliding){
+                gravityVelocity.y = -10f;
+            }
+        }
+
+        //Returns to traditional gravity stength if the player is sliding but above the ground
+        if(isSliding && !isGrounded){
             gravityVelocity.y = -2f;
         }
 
