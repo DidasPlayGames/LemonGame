@@ -174,6 +174,11 @@ public class PlayerLook : MonoBehaviour
                 slideDistance += slopeAngle * angleEffectMultiplier * Time.deltaTime;
             }
 
+            
+            if(uphill && isGrounded){
+                slideDistance -= slopeAngle * (angleEffectMultiplier/2) * Time.deltaTime;
+            }
+
             //Moves the variable into a vector, which is already transfromed into local space. This is then applied to the global velocity vector
             Vector3 slideVector = transform.forward * slideDistance;
             velocity += slideVector;
