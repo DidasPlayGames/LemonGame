@@ -190,7 +190,7 @@ public class PlayerLook : MonoBehaviour
                 slideDistance += slopeAngle * angleEffectMultiplier * Time.deltaTime;
             }
 
-            
+            //Decreases slide velocity if the player is travelling uphill
             if(uphill && isGrounded){
                 slideDistance -= slopeAngle * (angleEffectMultiplier/2) * Time.deltaTime;
             }
