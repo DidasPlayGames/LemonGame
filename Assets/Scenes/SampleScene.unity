@@ -1647,7 +1647,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 588612903}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.61, z: 0}
+  m_LocalPosition: {x: 0, y: 0.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 1044657692}
@@ -2495,7 +2495,8 @@ MonoBehaviour:
   mouseSensitivity: 1000
   playerCamera: {fileID: 588612903}
   controller: {fileID: 1044657691}
-  movementSpeed: 10
+  intialMovementSpeedY: 10
+  intialMovementSpeedX: 10
   gravityStength: -10
   groundCheck: {fileID: 1551436388}
   groundDistance: 0.4
@@ -2503,7 +2504,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   jumpHeight: 2.5
-  intialSlideForce: 10
+  intialSlideForce: 15
   slideDecrease: 0.01
   initialSlideCooldown: 1
   rearRayTransform: {fileID: 1263384253}

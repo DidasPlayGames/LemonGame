@@ -18,7 +18,10 @@ public class PlayerLook : MonoBehaviour
     private float horizontalInput;
     private float verticalInput;
     [SerializeField] private CharacterController controller;
-    [SerializeField] private int movementSpeed;
+    [SerializeField] private int intialMovementSpeedY;
+    [SerializeField] private int intialMovementSpeedX;
+    private float movementSpeedY;
+    private float movementSpeedX;
     private bool isSliding;
 
     //Variables for Gravity and Ground-Checking
@@ -62,10 +65,17 @@ public class PlayerLook : MonoBehaviour
 
         //Sets the slide cooldown to its intended value that was set in the editor
         slideCooldown = initialSlideCooldown;
+
+        //Introduces intial values to movementSpeed variables
+        movementSpeedX = intialMovementSpeedX;
+        movementSpeedY = intialMovementSpeedY;
     }
 
     void Update()
     {   
+        //Look() is called first to aviod any rigid camera movement
+        Look();
+
         //Updates the Sliding Cooldown
         slideCooldown -= Time.deltaTime;
 
@@ -75,30 +85,27 @@ public class PlayerLook : MonoBehaviour
             StartCoroutine("Slide");
         }
 
-        //Checks for input for jumping
-        if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
-            Jump();
-        }
+
 
         //Calls all processes
         Move();
         ApplyGravity();
         DetectSlope();
 
+        //Checks for input for jumping
+        if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
+            Jump();
+        }
         
+        //Applies the gravityVelocity Vector3, using the CharacterController
+        controller.Move(gravityVelocity * Time.deltaTime);
+
         //Applies all movement processes and calculation. This line actually translates the player
         controller.Move(velocity);
         //Clears the vector, allowing all movement calculations to be added and recalculated once again
         velocity = Vector3.zero;
-
-        Debug.Log(slideCooldown);
     }
 
-    // Calls Late Processes
-    void LateUpdate() {
-        //Look is delayed so that it is processed after moving the player
-        Look();
-    }
 
     //Handles calculating the slope and determining if the player is travelling uphill or downhill
     void DetectSlope(){
@@ -154,16 +161,25 @@ public class PlayerLook : MonoBehaviour
     }
 
 
-
     //Handles sliding, which must take place over multiple seconds
     IEnumerator Slide(){
         //Introduces any starting values
-        slideDistance = 1 * intialSlideForce * Time.deltaTime;
+        slideDistance = intialSlideForce * Time.deltaTime;
+
+        //Changes speed of movement
+        movementSpeedY = 0;
+        movementSpeedX = intialMovementSpeedX/2;
+
+        //Introduces key variable
+        bool keepSlide = true;
+
+        //Translates the camera downwards at the beginning of the slide
+        playerCamera.transform.localPosition /= 2;
 
         //Loop that ends if velocity is too low
-        while(slideDistance > 0.01){
+        while(keepSlide){
 
-            //Cancels any vertical input, disabling the option to move forwards or backwards
+            //Alerts other procedures
             isSliding = true;
 
             //Decreases force of slide over time
@@ -183,15 +199,27 @@ public class PlayerLook : MonoBehaviour
             Vector3 slideVector = transform.forward * slideDistance;
             velocity += slideVector;
 
-            //Does something important (I have no idea, but the code doesn't work if I remove it)
+            //Stops the slide if criteria are met, or input is placed
+            if(slideDistance <= 0 || (slideDistance <= 0.01 && (verticalInput > 0.1 || horizontalInput != 0))){
+                keepSlide = false;
+            }
+
+            //Does something important (I have no idea what, but the code doesn't work if I remove it)
             yield return null;
         }  
 
-        //Reanbles movement
+        //Alerts other procedures
         isSliding = false;
+
+        //Returns to traditional movement speed
+        movementSpeedX = intialMovementSpeedX;
+        movementSpeedY = intialMovementSpeedY;
 
         //Resets the slide cooldown. Must be done at the end to prevent instantly sliding after a long slide
         slideCooldown = initialSlideCooldown;
+
+        //Translates the camera upwards at the end of the slide
+        playerCamera.transform.localPosition *= 2;
     }
 
 
@@ -207,44 +235,37 @@ public class PlayerLook : MonoBehaviour
         //Checks if the player is grounded
         isGrounded = Physics.CheckSphere(groundCheck.transform.position, groundDistance, groundMask);
 
+        movementSpeedX = intialMovementSpeedX/1.5f;
+        movementSpeedY = intialMovementSpeedY;
+
         //Removes any velocity build-up when the floor is touched
         if(isGrounded && gravityVelocity.y < 0){
             //Negative velocity is used to ensure to player never hovers above the ground
-            gravityVelocity.y = -2f;
+            gravityVelocity.y = -10f;
 
-            //Checks if the player is siliding. Applies extra gravity to counteract the additional velocity of a slide off a slope
-            if(isSliding){
-                gravityVelocity.y = -10f;
-            }
-        }
-
-        //Returns to traditional gravity stength if the player is sliding but above the ground
-        if(isSliding && !isGrounded){
-            gravityVelocity.y = -2f;
+            //Returns movementSpeed values to intial, as they have been modified when airborne
+            movementSpeedX = intialMovementSpeedX;
+            movementSpeedX = intialMovementSpeedY;
         }
 
         //Creates a Vector3, which will be used to apply the force of gravity
         gravityVelocity.y += gravityStength * Time.deltaTime;
-        //Applies the gravityVelocity Vector3, using the CharacterController
-        controller.Move(gravityVelocity * Time.deltaTime);
     }
 
     //Handles translating the player with input from the keyboard
     void Move(){
-        //Gathers input from the keyboard and converts into appropriate value
-        horizontalInput = Input.GetAxis("Horizontal") * movementSpeed * Time.deltaTime;
-        //Vertical input is in an if statement because it must be disable during sliding
-        if(!isSliding){
-            verticalInput = Input.GetAxis("Vertical") * movementSpeed * Time.deltaTime;
-        }
-        else{
-            verticalInput = 0f;
-        }
+        //Gathers input from the keyboard
+        horizontalInput = Input.GetAxis("Horizontal");
+        verticalInput = Input.GetAxis("Vertical");
 
-
-        //Creates the movement vector based on the input gathered, and applies to the global velocity vector
-        Vector3 move = Vector3.right * horizontalInput + Vector3.forward * verticalInput;
+        //Creates the movement vector based on the input gathered
+        Vector3 move = Vector3.right * (horizontalInput * movementSpeedX * Time.deltaTime) + Vector3.forward * (verticalInput * movementSpeedY * Time.deltaTime);
         Vector3 localMove = transform.TransformDirection(move);
+        
+        //Clamps the velocity of the move vector, as pressing 2 keys at once can create faster movement
+        localMove = Vector3.ClampMagnitude(localMove, intialMovementSpeedX * Time.deltaTime);
+
+        //Applies the generated move vector into the global velocity vector
         velocity += localMove;
     }
 
