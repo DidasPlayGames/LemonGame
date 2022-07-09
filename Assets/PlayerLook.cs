@@ -41,11 +41,15 @@ public class PlayerLook : MonoBehaviour
     [SerializeField] private float slideDecrease;
     [SerializeField] private float initialSlideCooldown;
     private float slideCooldown;
+    [SerializeField] private float angleEffectMultiplier;
+
+    //Variables for wall detection in front of player
+    [SerializeField] private GameObject wallCheck;
+    [SerializeField] private float wallDistance;
 
     //Variables for Detecting Slope Angle
     [SerializeField] private Transform rearRayTransform;
     [SerializeField] private Transform frontRayTransform;
-    [SerializeField] private LayerMask slopeMask;
     private float slopeAngle;
     private float rearRayDistance;
     private float frontRayDistance;
@@ -55,8 +59,6 @@ public class PlayerLook : MonoBehaviour
     private bool downhill;
     private bool flatSurface;
 
-    //Applying slope direction and angle into sliding
-    [SerializeField] private float angleEffectMultiplier;
 
     void Start()
     {   
@@ -121,7 +123,7 @@ public class PlayerLook : MonoBehaviour
         RaycastHit frontHit;
 
         //Casts rear ray
-        if(Physics.Raycast(rearRayTransform.position, rearRayTransform.TransformDirection(Vector3.down), out backHit, Mathf.Infinity, slopeMask)){
+        if(Physics.Raycast(rearRayTransform.position, rearRayTransform.TransformDirection(Vector3.down), out backHit, Mathf.Infinity, groundMask)){
             //Collects the distance of the ray
             rearRayDistance = backHit.distance;
 
@@ -134,7 +136,7 @@ public class PlayerLook : MonoBehaviour
         }
 
         //Casts front ray
-        if(Physics.Raycast(frontRayTransform.position, frontRayTransform.TransformDirection(Vector3.down), out frontHit, Mathf.Infinity, slopeMask)){
+        if(Physics.Raycast(frontRayTransform.position, frontRayTransform.TransformDirection(Vector3.down), out frontHit, Mathf.Infinity, groundMask)){
             //Collects the distance of the ray
             frontRayDistance = frontHit.distance;
             
@@ -200,7 +202,7 @@ public class PlayerLook : MonoBehaviour
             velocity += slideVector;
 
             //Stops the slide if criteria are met, or input is placed
-            if(slideDistance <= 0 || (slideDistance <= 0.01 && (verticalInput > 0.1 || horizontalInput != 0))){
+            if(slideDistance <= 0 || (slideDistance <= 0.01 && (verticalInput > 0.1 || horizontalInput != 0)) || Physics.CheckSphere(wallCheck.transform.position, wallDistance, groundMask)){
                 keepSlide = false;
             }
 
@@ -221,7 +223,6 @@ public class PlayerLook : MonoBehaviour
         //Translates the camera upwards at the end of the slide
         playerCamera.transform.localPosition *= 2;
     }
-
 
     //Handles moving the player upwards during a jump
     void Jump(){
