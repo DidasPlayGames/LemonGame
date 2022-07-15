@@ -7,17 +7,19 @@ public class PlayerLook : MonoBehaviour
     //Major Variable used to move the player horizontally
     private Vector3 velocity;
 
+    [SerializeField] private Rigidbody rbPlayer;
+
     //Variables for Rotation and Looking
     private float mouseX;
     private float mouseY;
     [SerializeField] private float mouseSensitivity;
     [SerializeField] private GameObject playerCamera;
     private float xRotation = 0f;
-    
+    private float yRotation = 0f;
+
     // Variables for Moving
     private float horizontalInput;
     private float verticalInput;
-    [SerializeField] private CharacterController controller;
     [SerializeField] private int intialMovementSpeedY;
     [SerializeField] private int intialMovementSpeedX;
     private float movementSpeedY;
@@ -26,7 +28,6 @@ public class PlayerLook : MonoBehaviour
 
     //Variables for Gravity and Ground-Checking
     Vector3 gravityVelocity;
-    [SerializeField] private float gravityStength;
     [SerializeField] private GameObject groundCheck;
     [SerializeField] private float groundDistance = 0.4f;
     [SerializeField] private LayerMask groundMask;
@@ -59,6 +60,9 @@ public class PlayerLook : MonoBehaviour
     private bool downhill;
     private bool flatSurface;
 
+    //Variables for Countermovement of the player (Drag)
+    [SerializeField] private int groundDrag;
+    [SerializeField] private int airDrag;
 
     void Start()
     {   
@@ -75,8 +79,11 @@ public class PlayerLook : MonoBehaviour
 
     void Update()
     {   
-        //Look() is called first to aviod any rigid camera movement
         Look();
+
+        //Checks if the player is grounded
+        isGrounded = Physics.CheckSphere(groundCheck.transform.position, groundDistance, groundMask);
+
 
         //Updates the Sliding Cooldown
         slideCooldown -= Time.deltaTime;
@@ -87,27 +94,53 @@ public class PlayerLook : MonoBehaviour
             StartCoroutine("Slide");
         }
 
-
-
         //Calls all processes
         Move();
-        ApplyGravity();
+        GroundProcedures(); 
         DetectSlope();
 
         //Checks for input for jumping
         if(Input.GetKeyDown(KeyCode.Space) && isGrounded){
             Jump();
         }
-        
-        //Applies the gravityVelocity Vector3, using the CharacterController
-        controller.Move(gravityVelocity * Time.deltaTime);
 
-        //Applies all movement processes and calculation. This line actually translates the player
-        controller.Move(velocity);
-        //Clears the vector, allowing all movement calculations to be added and recalculated once again
-        velocity = Vector3.zero;
+
     }
 
+    //All Physics processes are called in FixedUpdate() for smoother movement
+    void FixedUpdate() {
+        //Applies the velocity vector, by using AddForce
+        rbPlayer.AddForce(velocity, ForceMode.Acceleration);
+        //Clears the vector, allowing all movement calculations to be added and recalculated once again
+        velocity = Vector3.zero;
+
+    }
+
+    //All processes that should be executed lastly
+    void LateUpdate() {
+        //The player should be rotated at the end, in order to update the camera position to the new player position
+
+    }
+
+    //Handles needed processes related to grounding of the player
+    void GroundProcedures(){
+        if(!isGrounded){
+            //Decrease the MovementSpeed if !isGrounded
+            movementSpeedX = intialMovementSpeedX/1.5f;
+            movementSpeedY = intialMovementSpeedY/1.5f;
+            //Decreases the drag of the player, in order to achieve higher terminal velocity, therefore fall faster
+            rbPlayer.drag = airDrag;
+
+        }
+        else{
+            //Return MovementSpeed once the player becomes grounded once again, as they have been modified when the player was airborne
+            movementSpeedX = intialMovementSpeedX;
+            movementSpeedY = intialMovementSpeedY;
+            //Returns the drag of the player to normal, as it has been decreased when airborne
+            rbPlayer.drag = groundDrag;
+        }
+
+    }
 
     //Handles calculating the slope and determining if the player is travelling uphill or downhill
     void DetectSlope(){
@@ -227,30 +260,8 @@ public class PlayerLook : MonoBehaviour
     //Handles moving the player upwards during a jump
     void Jump(){
         //Formula allows to instatly determine the height of the jump
-        //This must be aaplied to the gravityVelocity vector, as it has to cancel the gravity force in order to work.
-        gravityVelocity.y = Mathf.Sqrt(jumpHeight * -2 * gravityStength);
-    }
-
-    //Handles pushing the player downwards if they are not touching the ground. This function also handles isGrounded boolean calculations
-    void ApplyGravity(){
-        //Checks if the player is grounded
-        isGrounded = Physics.CheckSphere(groundCheck.transform.position, groundDistance, groundMask);
-
-        movementSpeedX = intialMovementSpeedX/1.5f;
-        movementSpeedY = intialMovementSpeedY;
-
-        //Removes any velocity build-up when the floor is touched
-        if(isGrounded && gravityVelocity.y < 0){
-            //Negative velocity is used to ensure to player never hovers above the ground
-            gravityVelocity.y = -10f;
-
-            //Returns movementSpeed values to intial, as they have been modified when airborne
-            movementSpeedX = intialMovementSpeedX;
-            movementSpeedX = intialMovementSpeedY;
-        }
-
-        //Creates a Vector3, which will be used to apply the force of gravity
-        gravityVelocity.y += gravityStength * Time.deltaTime;
+        //This is autamatically applied as a force, as it is a different force mode compared to the velocity vector
+        rbPlayer.AddForce(Vector3.up * Mathf.Sqrt(jumpHeight * -2 * -9.81f), ForceMode.VelocityChange);
     }
 
     //Handles translating the player with input from the keyboard
@@ -280,8 +291,12 @@ public class PlayerLook : MonoBehaviour
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90, 90);
 
+        //Generates an appopriat angle for horizontal rotation, preventing rigid camera rotation
+        yRotation += mouseX;
+
         //Rotates the player and camera according to player's input
         playerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0, 0);
-        transform.Rotate(Vector3.up * mouseX);
+        transform.rotation = Quaternion.Euler(0, yRotation, 0);
     }
 }
+ 
